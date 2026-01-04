@@ -23,7 +23,7 @@ Support Actions to build automatically, generate normal/overclocking BL2.
 ## Prepare
 
 ```bash
-sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler qemu-user-static
+sudo apt install gcc-aarch64-linux-gnu build-essential flex bison libssl-dev device-tree-compiler qemu-user-static python2-dev swig
 ```
 
 ## Build
@@ -61,6 +61,20 @@ chmod +x generate_gpt.sh
 Generate file will be in `output_gpt`
 
 > You need add your device's partition info json file in "mt798x_gpt", like e.g. "atf-dir/tools/dev/gpt_editor/example/gpt.json"
+
+When you enable `SDMMC=1` like `SDMMC=1 ./generate_gpt.sh`, the generated gpt image will support MTK SDMMC.
+
+### Show GPT info
+
+Create a directory named `mt798x_gpt_bin` in the respository root directory, and put your gpt bin files in it.
+
+Then run:
+
+```bash
+./show_gpt.sh
+```
+
+Then it will show the GPT partition info of all gpt bin files in `mt798x_gpt_bin` directory, and output to `gpt_info.txt` in `output_gpt` directory.
 
 ## Use Action to build
 
