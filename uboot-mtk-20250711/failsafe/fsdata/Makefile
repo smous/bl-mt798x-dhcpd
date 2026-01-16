@@ -49,6 +49,10 @@ obj-y += main.o
 FILE_main.o := main.js
 FSPATH_main.o := main.js
 
+obj-y += reboot.o
+FILE_reboot.o := reboot.html
+FSPATH_reboot.o := reboot.html
+
 obj-y += style.o
 FILE_style.o := style.css
 FSPATH_style.o := style.css

@@ -78,7 +78,7 @@ function ensureSidebar() {
         setLang(r.value)
     }, c.appendChild(r), h.appendChild(c), l = document.createElement("div"), l.className = "control-row", g = document.createElement("div"), g.setAttribute("data-i18n", "control.theme"), g.textContent = t("control.theme"), l.appendChild(g), n = document.createElement("select"), n.id = "theme_select", a = document.createElement("option"), a.value = "auto", a.setAttribute("data-i18n", "theme.auto"), a.textContent = t("theme.auto"), v = document.createElement("option"), v.value = "light", v.setAttribute("data-i18n", "theme.light"), v.textContent = t("theme.light"), y = document.createElement("option"), y.value = "dark", y.setAttribute("data-i18n", "theme.dark"), y.textContent = t("theme.dark"), n.appendChild(a), n.appendChild(v), n.appendChild(y), n.value = APP_STATE.theme, n.onchange = function () {
         setTheme(n.value)
-    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), u.appendChild(o("/gpt.html", "nav.gpt", "gpt")), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), r = o("/reboot", "nav.reboot", "reboot"), r.onclick = function () {
+    }, l.appendChild(n), h.appendChild(l), i.appendChild(h), p = document.createElement("div"), p.className = "nav", e = document.createElement("div"), e.className = "nav-section", w = document.createElement("div"), w.className = "nav-section-title", w.setAttribute("data-i18n", "nav.basic"), w.textContent = t("nav.basic"), e.appendChild(w), e.appendChild(o("/", "nav.firmware", "firmware")), e.appendChild(o("/uboot.html", "nav.uboot", "uboot")), p.appendChild(e), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.advanced"), b.textContent = t("nav.advanced"), u.appendChild(b), u.appendChild(o("/bl2.html", "nav.bl2", "bl2")), u.appendChild(o("/gpt.html", "nav.gpt", "gpt")), u.appendChild(o("/factory.html", "nav.factory", "factory")), u.appendChild(o("/initramfs.html", "nav.initramfs", "initramfs")), p.appendChild(u), u = document.createElement("div"), u.className = "nav-section", b = document.createElement("div"), b.className = "nav-section-title", b.setAttribute("data-i18n", "nav.system"), b.textContent = t("nav.system"), u.appendChild(b), u.appendChild(o("/backup.html", "nav.backup", "backup")), r = o("/reboot.html", "nav.reboot", "reboot"), r.onclick = function () {
         return confirm(t("reboot.confirm"))
     }, u.appendChild(r), p.appendChild(u), i.appendChild(p), applyI18n(i))
 }
@@ -375,6 +375,8 @@ var I18N = {
         "factory.warn.2": "if everything goes well, the device will restart",
         "factory.warn.3": "updating factory partition may damage your device or break calibration data",
         "reboot.confirm": "Reboot device now?",
+        "reboot.title.in_progress": "REBOOTING DEVICE",
+        "reboot.info.in_progress": "Reboot request has been sent. Please wait...<br>This page may be in not responding status for a short time.",
         "backup.title": "BACKUP",
         "backup.hint": "Download a backup from device storage as a <strong>binary file<\/strong>.<br>The backup data will be streamed to your browser and saved on your computer.",
         "backup.label.mode": "Mode:",
@@ -478,6 +480,8 @@ var I18N = {
         "factory.warn.2": "如果一切顺利，设备会自动重启",
         "factory.warn.3": "更新 factory 分区风险极高，可能破坏校准数据并导致设备异常！",
         "reboot.confirm": "确认立即重启设备？",
+        "reboot.title.in_progress": "正在重启设备…",
+        "reboot.info.in_progress": "已发送重启请求，请稍候…<br>该页面短时间可能显示无响应，这是正常现象。",
         "backup.title": "备份",
         "backup.hint": "从设备存储中导出备份并保存为<strong>二进制文件<\/strong>。<br>备份数据将以流式方式传输到浏览器，并保存在你的电脑上。",
         "backup.label.mode": "模式：",
