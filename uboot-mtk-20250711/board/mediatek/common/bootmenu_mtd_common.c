@@ -450,6 +450,12 @@ int generic_mtd_write_simg(void *priv, const struct data_part_entry *dpe,
 	return ret;
 }
 
+int generic_mtd_write_factory(void *priv, const struct data_part_entry *dpe,
+			      const void *data, size_t size)
+{
+	return write_mtd_part("factory", data, size, true);
+}
+
 int generic_mtd_validate_fw(void *priv, const struct data_part_entry *dpe,
 			    const void *data, size_t size)
 {

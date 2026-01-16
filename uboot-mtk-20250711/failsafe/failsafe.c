@@ -157,6 +157,14 @@ static void upload_handler(enum httpd_uri_handler_status status,
 		goto done;
 	}
 
+	fw = httpd_request_find_value(request, "factory");
+	if (fw) {
+		fw_type = FW_TYPE_FACTORY;
+		if (failsafe_validate_image(fw->data, fw->size, fw_type))
+			goto fail;
+		goto done;
+	}
+
 	fw = httpd_request_find_value(request, "initramfs");
 	if (fw) {
 		fw_type = FW_TYPE_INITRD;
@@ -395,6 +403,7 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/booting.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/cgi-bin/luci", &index_handler, NULL);
 	httpd_register_uri_handler(inst, "/cgi-bin/luci/", &index_handler, NULL);
+	httpd_register_uri_handler(inst, "/factory.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/fail.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/flashing.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/getmtdlayout", &mtd_layout_handler, NULL);

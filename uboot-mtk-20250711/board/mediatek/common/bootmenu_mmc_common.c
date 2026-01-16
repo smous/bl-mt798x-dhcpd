@@ -264,6 +264,12 @@ int generic_mmc_write_gpt(void *priv, const struct data_part_entry *dpe,
 	return mmc_write_gpt(MMC_DEV_INDEX, 0, GPT_MAX_SIZE, data, size);
 }
 
+int generic_mmc_write_factory(void *priv, const struct data_part_entry *dpe,
+			      const void *data, size_t size)
+{
+	return write_mmc_part("factory", data, size, true);
+}
+
 int generic_mmc_validate_fw(void *priv, const struct data_part_entry *dpe,
 			    const void *data, size_t size)
 {

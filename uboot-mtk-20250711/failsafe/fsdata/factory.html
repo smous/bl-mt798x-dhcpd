@@ -1,0 +1,55 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Factory update</title>
+	<link rel="stylesheet" href="/style.css">
+	<script src="/main.js"></script>
+</head>
+
+<body onload="appInit('factory')" data-page="factory">
+	<div class="app">
+		<aside id="sidebar" class="sidebar"></aside>
+		<div class="main">
+			<div id="m">
+				<div class="card-head">
+					<h1 data-i18n="factory.title">FACTORY UPDATE</h1>
+					<p id="hint" data-i18n-html="factory.hint">
+						You are going to update <strong>factory</strong> partition on the device.<br>
+						Please, choose file from your local hard drive and click <strong>Upload</strong> button.
+					</p>
+				</div>
+				<div class="card-main">
+					<form id="form">
+						<input id="file" type="file" name="factory">
+						<input type="button" value="Upload" data-i18n-attr="value:common.upload"
+							onclick="upload('factory')">
+					</form>
+					<div class="bar" id="bar" style="display: none; --percent: 0;"></div>
+					<div id="size" style="display: none;">Size: xxxx</div>
+					<div id="md5" style="display: none;">MD5: xxxx</div>
+					<div id="upgrade" style="display: none;">
+						<p data-i18n="factory.upgrade_hint">If all information above is correct, click "Update".</p>
+						<button class="button" data-i18n="common.update"
+							onclick="location = '/flashing.html'">Update</button>
+					</div>
+				</div>
+				<div class="card-foot">
+					<div class="i w">
+						<strong data-i18n="common.warnings">WARNINGS</strong>
+						<ul>
+							<li data-i18n="factory.warn.1">do not power off the device during update</li>
+							<li data-i18n="factory.warn.2">if everything goes well, the device will restart</li>
+							<li data-i18n="factory.warn.3">updating factory partition may damage your device or break calibration data</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div id="version"></div>
+		</div>
+	</div>
+</body>
+
+</html>
