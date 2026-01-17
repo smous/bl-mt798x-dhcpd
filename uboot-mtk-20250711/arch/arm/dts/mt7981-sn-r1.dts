@@ -8,7 +8,7 @@
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
-	model = "mt7981-rfb";
+	model = "mt7981-sn_r1";
 	compatible = "mediatek,mt7981", "mediatek,mt7981-rfb";
 	chosen {
 		stdout-path = &uart0;
@@ -17,8 +17,8 @@
 
 	config {
 		bootcmd = "mtkboardboot";
-		blink_led = "blue:status";
-		system_led = "red:status";
+		blink_led = "yellow:status";
+		system_led = "blue:status";
 	};
 
 	memory@40000000 {
@@ -35,9 +35,9 @@
 			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
 		};
 
-		wps-button {
-			label = "wps";
-			linux,code = <KEY_WPS_BUTTON>;
+		mesh-button {
+			label = "mesh";
+			linux,code = <BTN_9>;
 			gpios = <&pio 0 GPIO_ACTIVE_HIGH>;
 		};
 	};
