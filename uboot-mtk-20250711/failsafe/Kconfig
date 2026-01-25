@@ -10,6 +10,21 @@ config WEBUI_FAILSAFE
 	help
 	  Enable Web based failsafe UI
 
+choice
+	prompt "Failsafe Web UI style"
+	default WEBUI_FAILSAFE_UI_NEW
+	depends on WEBUI_FAILSAFE
+	help
+	  Select which UI resources to embed for failsafe Web UI.
+
+config WEBUI_FAILSAFE_UI_NEW
+	bool "New UI (fsdata)"
+
+config WEBUI_FAILSAFE_UI_OLD
+	bool "Old UI (fsdata_old)"
+
+endchoice
+
 config WEBUI_FAILSAFE_FACTORY
 	bool "Enable Factory upgrade"
 	default y

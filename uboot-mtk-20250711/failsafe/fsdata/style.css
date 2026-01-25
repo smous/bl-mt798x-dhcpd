@@ -522,7 +522,8 @@ ul {
     text-align: left;
 }
 
-#upgrade {
+#upgrade,
+#project-info {
     text-align: center;
 }
 

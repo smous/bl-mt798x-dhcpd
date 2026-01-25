@@ -66,6 +66,10 @@ function ensureBranding() {
     var t = document.getElementById("version"),
         n, i;
     t && ((n = t.nextElementSibling, n && n.classList && n.classList.contains("brand") && n.parentNode && n.parentNode.removeChild(n), t.querySelector && t.querySelector(".brand-inline")) || (i = document.createElement("span"), i.className = "brand-inline", i.textContent = "💡Yuzhii", t.appendChild(document.createTextNode(" ")), t.appendChild(i)))
+    var projectInfo = document.createElement("div");
+    projectInfo.id = "project-info";
+    projectInfo.innerHTML = 'You can find more infomation about this project: <a href="https://github.com/Yuzhii0718/bl-mt798x-dhcpd" target="_blank">Github</a>';
+    t.parentNode.insertBefore(projectInfo, t.nextSibling);
 }
 
 function ensureSidebar() {
