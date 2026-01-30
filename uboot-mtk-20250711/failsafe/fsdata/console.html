@@ -1,0 +1,62 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title data-i18n="console.title">WEB CONSOLE</title>
+	<link rel="stylesheet" href="/style.css">
+	<script src="/main.js"></script>
+</head>
+
+<body onload="appInit('console')" data-page="console">
+	<div class="app">
+		<aside id="sidebar" class="sidebar"></aside>
+		<div class="main">
+			<div id="m">
+				<div class="card-head">
+					<h1 data-i18n="console.title">WEB CONSOLE</h1>
+					<p id="hint" data-i18n-html="console.hint">
+						Run <strong>U-Boot commands</strong> directly in your browser.<br>
+						Output is streamed by polling (no WebSocket). Treat this as <strong>root access</strong>.
+					</p>
+				</div>
+				<div class="card-main">
+					<div class="console-card">
+						<div id="console_out" class="console-output" aria-label="console output"></div>
+
+						<div class="console-toolbar">
+							<input id="console_token" class="console-token" type="password" autocomplete="off"
+								data-i18n-attr="placeholder:console.placeholder.token"
+								placeholder="token (optional)" aria-label="token">
+							<button type="button" class="button" onclick="consoleClear()" data-i18n="console.clear">Clear</button>
+						</div>
+
+						<div class="console-input-row">
+							<input id="console_cmd" class="console-input" type="text" autocomplete="off"
+								autocapitalize="off" autocorrect="off" spellcheck="false"
+								data-i18n-attr="placeholder:console.placeholder.cmd"
+								placeholder="help; printenv; mtd list" aria-label="command">
+							<button type="button" class="button" onclick="consoleSend()" data-i18n="console.send">Send</button>
+						</div>
+
+						<div id="console_status" class="console-status"></div>
+					</div>
+				</div>
+				<div class="card-foot">
+					<div class="i w">
+						<strong data-i18n="common.warnings">WARNINGS</strong>
+						<ul>
+							<li data-i18n="console.warn.1">This console can execute arbitrary U-Boot commands.</li>
+							<li data-i18n="console.warn.2">Do not expose this page on untrusted networks.</li>
+							<li data-i18n="console.warn.3">If you set env failsafe_console_token, enter it above to unlock.</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+			<div id="version"></div>
+		</div>
+	</div>
+</body>
+
+</html>

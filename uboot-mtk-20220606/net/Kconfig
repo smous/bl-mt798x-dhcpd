@@ -42,6 +42,15 @@ config MTK_DHCPD
 	  Enable a minimal DHCPv4 server that answers DHCPDISCOVER/DHCPREQUEST
 	  while the MediaTek web failsafe UI (httpd) is running.
 
+config MTK_DHCPD_ENHANCED
+	bool "Enhanced DHCP server behavior"
+	default y
+	depends on MTK_DHCPD
+	help
+	  Enable enhanced DHCPREQUEST validation and stable IP allocation.
+	  Adds Server Identifier checks, DHCPNAK support, and hash-based pool
+	  allocation with collision avoidance.
+
 config BOOTDEV_ETH
 	bool "Enable bootdev for ethernet"
 	depends on BOOTSTD

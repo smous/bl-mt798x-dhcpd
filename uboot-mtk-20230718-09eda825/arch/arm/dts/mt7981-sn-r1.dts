@@ -3,7 +3,6 @@
 /dts-v1/;
 #include "mt7981.dtsi"
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
 
 / {
 	#address-cells = <1>;
@@ -18,8 +17,8 @@
 
 	config {
 		bootcmd = "mtkboardboot";
-		blink_led = "red:status";
-		system_led = "blue:status";
+		blink_led = "red:system";
+		system_led = "blue:system";
 	};
 
 	memory@40000000 {
@@ -32,6 +31,7 @@
 
 		reset-button {
 			label = "reset";
+			linux,code = <KEY_RESTART>;
 			gpios = <&gpio 1 GPIO_ACTIVE_LOW>;
 		};
 
@@ -61,15 +61,6 @@
 		};
 	};
 
-	reg_1p8v: regulator-1p8v {
-		compatible = "regulator-fixed";
-		regulator-name = "fixed-1.8V";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		regulator-boot-on;
-		regulator-always-on;
-	};
-
 	reg_3p3v: regulator-3p3v {
 		  compatible = "regulator-fixed";
 		  regulator-name = "fixed-3.3V";
@@ -78,17 +69,21 @@
 		  regulator-boot-on;
 		  regulator-always-on;
 	};
+
+	bl2_verify {
+		bl2_compatible = "emmc";
+	};
 };
 
 &eth {
 	status = "okay";
 	mediatek,gmac-id = <0>;
-	phy-mode = "sgmii";
+	phy-mode = "2500base-x";
 	mediatek,switch = "mt7531";
 	reset-gpios = <&gpio 39 GPIO_ACTIVE_HIGH>;
 
 	fixed-link {
-		speed = <1000>;
+		speed = <2500>;
 		full-duplex;
 	};
 };
@@ -101,7 +96,6 @@
 	cap-mmc-highspeed;
 	cap-mmc-hw-reset;
 	vmmc-supply = <&reg_3p3v>;
-	vqmmc-supply = <&reg_1p8v>;
 	non-removable;
 	status = "okay";
 };

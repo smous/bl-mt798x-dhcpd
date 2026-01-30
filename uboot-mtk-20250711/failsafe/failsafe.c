@@ -10,7 +10,12 @@
 #include <command.h>
 #include <errno.h>
 #include <env.h>
+#ifdef CONFIG_WEBUI_FAILSAFE_ENV
+#include <env_internal.h>
+#endif
 #include <malloc.h>
+#include <console.h>
+#include <membuf.h>
 #include <net.h>
 #include <net/mtk_tcp.h>
 #include <net/mtk_httpd.h>
@@ -34,16 +39,6 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-int __weak failsafe_validate_image(const void *data, size_t size, failsafe_fw_t fw)
-{
-	return 0;
-}
-
-int __weak failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
-{
-	return -ENOSYS;
-}
-
 #include "../board/mediatek/common/boot_helper.h"
 #ifdef CONFIG_MTD
 #include "../board/mediatek/common/mtd_helper.h"
@@ -62,13 +57,23 @@ static const void *upload_data;
  */
 static u32 fs_upload_id;
 static size_t upload_size;
-static failsafe_fw_t fw_type;
 static bool upgrade_success;
+static failsafe_fw_t fw_type;
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 static const char *mtd_layout_label;
 const char *get_mtd_layout_label(void);
 #define MTD_LAYOUTS_MAXLEN 128
 #endif
+
+int __weak failsafe_validate_image(const void *data, size_t size, failsafe_fw_t fw)
+{
+	return 0;
+}
+
+int __weak failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
+{
+	return -ENOSYS;
+}
 
 #ifdef CONFIG_MTK_BOOTMENU_MMC
 static bool failsafe_mmc_present(void)
@@ -155,9 +160,18 @@ static size_t json_escape(char *dst, size_t dst_sz, const char *src)
 			continue;
 		}
 
+		if (c == '\n' || c == '\r' || c == '\t')
+		{
+			if (di + 2 >= dst_sz)
+				break;
+			dst[di++] = '\\';
+			dst[di++] = (c == '\n') ? 'n' : (c == '\r') ? 'r' : 't';
+			continue;
+		}
+
 		if (c < 0x20)
 		{
-			/* skip control chars */
+			/* skip other control chars */
 			dst[di++] = ' ';
 			continue;
 		}
@@ -168,6 +182,606 @@ static size_t json_escape(char *dst, size_t dst_sz, const char *src)
 	dst[di] = '\0';
 	return di;
 }
+
+#ifdef CONFIG_WEBUI_FAILSAFE_CONSOLE
+#define WEB_CONSOLE_CMD_MAX	256
+#define WEB_CONSOLE_POLL_MAX	2048
+
+static const char *failsafe_get_prompt(void)
+{
+	const char *p = env_get("prompt");
+
+	if (p && p[0])
+		return p;
+
+#ifdef CONFIG_SYS_PROMPT
+	return CONFIG_SYS_PROMPT;
+#else
+	return "MTK> ";
+#endif
+}
+
+static void failsafe_webconsole_free_session(enum httpd_uri_handler_status status,
+	struct httpd_response *response)
+{
+	if (status != HTTP_CB_CLOSED)
+		return;
+
+	if (response->session_data) {
+		free(response->session_data);
+		response->session_data = NULL;
+	}
+}
+
+static int failsafe_webconsole_require_token(struct httpd_request *request,
+	struct httpd_response *response)
+{
+	const char *tok;
+	struct httpd_form_value *v;
+	size_t toklen;
+
+	tok = env_get("failsafe_console_token");
+	if (!tok || !tok[0])
+		return 0;
+
+	if (!request || request->method != HTTP_POST)
+		goto deny;
+
+	v = httpd_request_find_value(request, "token");
+	if (!v || !v->data)
+		goto deny;
+
+	toklen = strlen(tok);
+	if (v->size != toklen)
+		goto deny;
+
+	if (memcmp(v->data, tok, toklen))
+		goto deny;
+
+	return 0;
+
+deny:
+	response->status = HTTP_RESP_STD;
+	response->info.code = 403;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
+	response->data = "forbidden";
+	response->size = strlen(response->data);
+	return -EACCES;
+}
+
+static int failsafe_webconsole_ensure_recording(void)
+{
+	int ret;
+
+	if (!gd)
+		return -ENODEV;
+
+	if (!gd->console_out.start) {
+		ret = console_record_init();
+		if (ret)
+			return ret;
+	}
+
+	gd->flags |= GD_FLG_RECORD;
+	return 0;
+}
+
+static void webconsole_poll_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *chunk = NULL, *esc = NULL, *json = NULL;
+	int ret, avail, want, got;
+	size_t esc_sz, json_sz;
+
+	if (status == HTTP_CB_CLOSED) {
+		failsafe_webconsole_free_session(status, response);
+		return;
+	}
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	response->status = HTTP_RESP_STD;
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "application/json";
+
+	if (!request || request->method != HTTP_POST) {
+		response->info.code = 405;
+		response->data = "{\"error\":\"method\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	if (failsafe_webconsole_require_token(request, response))
+		return;
+
+	ret = failsafe_webconsole_ensure_recording();
+	if (ret) {
+		response->info.code = 503;
+		response->data = "{\"error\":\"no_console\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	avail = membuf_avail(&gd->console_out);
+	want = min(avail, (int)WEB_CONSOLE_POLL_MAX);
+
+	chunk = malloc(want + 1);
+	if (!chunk) {
+		response->info.code = 500;
+		response->data = "{\"error\":\"oom\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	got = want ? membuf_get(&gd->console_out, chunk, want) : 0;
+	chunk[got] = '\0';
+
+	/* Worst case: every char becomes ' ' or escaped with one extra backslash */
+	esc_sz = (size_t)got * 2 + 64;
+	esc = malloc(esc_sz);
+	if (!esc) {
+		free(chunk);
+		response->info.code = 500;
+		response->data = "{\"error\":\"oom\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	json_escape(esc, esc_sz, chunk);
+	free(chunk);
+
+	json_sz = strlen(esc) + 128;
+	json = malloc(json_sz);
+	if (!json) {
+		free(esc);
+		response->info.code = 500;
+		response->data = "{\"error\":\"oom\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	snprintf(json, json_sz, "{\"data\":\"%s\",\"avail\":%d}\n", esc,
+		membuf_avail(&gd->console_out));
+	free(esc);
+
+	response->data = json;
+	response->size = strlen(json);
+	response->session_data = json;
+}
+
+static void webconsole_exec_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	struct httpd_form_value *cmdv;
+	char cmd[WEB_CONSOLE_CMD_MAX + 1];
+	char *esc = NULL, *json = NULL;
+	int ret;
+	size_t esc_sz, json_sz;
+
+	if (status == HTTP_CB_CLOSED) {
+		failsafe_webconsole_free_session(status, response);
+		return;
+	}
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	response->status = HTTP_RESP_STD;
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "application/json";
+
+	if (!request || request->method != HTTP_POST) {
+		response->info.code = 405;
+		response->data = "{\"error\":\"method\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	if (failsafe_webconsole_require_token(request, response))
+		return;
+
+	ret = failsafe_webconsole_ensure_recording();
+	if (ret) {
+		response->info.code = 503;
+		response->data = "{\"error\":\"no_console\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	cmdv = httpd_request_find_value(request, "cmd");
+	if (!cmdv || !cmdv->data || !cmdv->size) {
+		response->info.code = 400;
+		response->data = "{\"error\":\"no_cmd\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	memset(cmd, 0, sizeof(cmd));
+	memcpy(cmd, cmdv->data, min((size_t)WEB_CONSOLE_CMD_MAX, cmdv->size));
+
+	/* Echo to console so browser sees what was executed */
+	{
+		const char *prompt = failsafe_get_prompt();
+		size_t plen = prompt ? strlen(prompt) : 0;
+		bool need_space = plen && prompt[plen - 1] != ' ' && prompt[plen - 1] != '\t';
+
+		if (!prompt || !prompt[0])
+			prompt = "MTK> ";
+
+		printf("%s%s%s\n", prompt, need_space ? " " : "", cmd);
+	}
+	ret = run_command(cmd, 0);
+
+	esc_sz = strlen(cmd) * 2 + 64;
+	esc = malloc(esc_sz);
+	if (!esc)
+		goto out_oom;
+
+	json_escape(esc, esc_sz, cmd);
+	json_sz = strlen(esc) + 128;
+	json = malloc(json_sz);
+	if (!json)
+		goto out_oom;
+
+	snprintf(json, json_sz, "{\"ok\":true,\"ret\":%d,\"cmd\":\"%s\"}\n", ret, esc);
+	free(esc);
+
+	response->data = json;
+	response->size = strlen(json);
+	response->session_data = json;
+	return;
+
+out_oom:
+	free(esc);
+	free(json);
+	response->info.code = 500;
+	response->data = "{\"error\":\"oom\"}\n";
+	response->size = strlen(response->data);
+}
+
+static void webconsole_clear_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *json;
+
+	if (status == HTTP_CB_CLOSED) {
+		failsafe_webconsole_free_session(status, response);
+		return;
+	}
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	response->status = HTTP_RESP_STD;
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "application/json";
+
+	if (!request || request->method != HTTP_POST) {
+		response->info.code = 405;
+		response->data = "{\"error\":\"method\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	if (failsafe_webconsole_require_token(request, response))
+		return;
+
+	if (failsafe_webconsole_ensure_recording()) {
+		response->info.code = 503;
+		response->data = "{\"error\":\"no_console\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	console_record_reset();
+
+	json = malloc(64);
+	if (!json) {
+		response->info.code = 500;
+		response->data = "{\"error\":\"oom\"}\n";
+		response->size = strlen(response->data);
+		return;
+	}
+
+	snprintf(json, 64, "{\"ok\":true}\n");
+	response->data = json;
+	response->size = strlen(json);
+	response->session_data = json;
+}
+#endif /* CONFIG_WEBUI_FAILSAFE_CONSOLE */
+
+#ifdef CONFIG_WEBUI_FAILSAFE_ENV
+#define ENV_NAME_MAX_LEN 128
+
+static void failsafe_env_free_session(enum httpd_uri_handler_status status,
+	struct httpd_response *response)
+{
+	if (status != HTTP_CB_CLOSED)
+		return;
+
+	if (response->session_data) {
+		free(response->session_data);
+		response->session_data = NULL;
+	}
+}
+
+static void failsafe_http_reply_text(struct httpd_response *response, int code,
+	const char *text)
+{
+	response->status = HTTP_RESP_STD;
+	response->data = text ? text : "";
+	response->size = strlen(response->data);
+	response->info.code = code;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
+}
+
+static int failsafe_env_get_form_value(struct httpd_request *request,
+	const char *key, char **out, size_t max_len, bool allow_empty)
+{
+	struct httpd_form_value *v;
+	char *buf;
+	size_t n;
+
+	if (!request || !key || !out)
+		return -EINVAL;
+
+	v = httpd_request_find_value(request, key);
+	if (!v || !v->data) {
+		if (allow_empty) {
+			buf = strdup("");
+			if (!buf)
+				return -ENOMEM;
+			*out = buf;
+			return 0;
+		}
+		return -EINVAL;
+	}
+
+	n = v->size;
+	if (!allow_empty && !n)
+		return -EINVAL;
+	if (n > max_len)
+		return -E2BIG;
+
+	buf = malloc(n + 1);
+	if (!buf)
+		return -ENOMEM;
+
+	memcpy(buf, v->data, n);
+	buf[n] = '\0';
+	*out = buf;
+	return 0;
+}
+
+static char *failsafe_env_export_text(size_t *out_len)
+{
+	env_t *envbuf;
+	char *out;
+	size_t out_sz, i, n;
+
+	if (out_len)
+		*out_len = 0;
+
+	envbuf = malloc(sizeof(*envbuf));
+	if (!envbuf)
+		return NULL;
+
+	if (env_export(envbuf)) {
+		free(envbuf);
+		return NULL;
+	}
+
+	out_sz = ENV_SIZE + 2;
+	out = malloc(out_sz);
+	if (!out) {
+		free(envbuf);
+		return NULL;
+	}
+
+	n = 0;
+	for (i = 0; i < ENV_SIZE - 1; i++) {
+		if (!envbuf->data[i] && !envbuf->data[i + 1])
+			break;
+
+		out[n++] = envbuf->data[i] ? envbuf->data[i] : '\n';
+		if (n + 1 >= out_sz)
+			break;
+	}
+
+	if (n && out[n - 1] != '\n')
+		out[n++] = '\n';
+
+	out[n] = '\0';
+	if (out_len)
+		*out_len = n;
+
+	free(envbuf);
+	return out;
+}
+
+static void env_list_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *out;
+	size_t out_len = 0;
+
+	if (status == HTTP_CB_CLOSED) {
+		failsafe_env_free_session(status, response);
+		return;
+	}
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_GET) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	out = failsafe_env_export_text(&out_len);
+	if (!out) {
+		failsafe_http_reply_text(response, 500, "export failed");
+		return;
+	}
+
+	response->status = HTTP_RESP_STD;
+	response->data = out;
+	response->size = out_len;
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
+	response->session_data = out;
+}
+
+static void env_set_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *name = NULL, *value = NULL;
+	int ret;
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	ret = failsafe_env_get_form_value(request, "name", &name,
+		ENV_NAME_MAX_LEN, false);
+	if (ret) {
+		failsafe_http_reply_text(response, 400, "bad name");
+		return;
+	}
+
+	ret = failsafe_env_get_form_value(request, "value", &value,
+		ENV_SIZE - 1, true);
+	if (ret) {
+		free(name);
+		failsafe_http_reply_text(response, 400, "bad value");
+		return;
+	}
+
+	ret = env_set(name, value);
+	if (!ret)
+		ret = env_save();
+
+	free(name);
+	free(value);
+
+	if (ret) {
+		failsafe_http_reply_text(response, 500, "save failed");
+		return;
+	}
+
+	failsafe_http_reply_text(response, 200, "ok");
+}
+
+static void env_unset_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	char *name = NULL;
+	int ret;
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	ret = failsafe_env_get_form_value(request, "name", &name,
+		ENV_NAME_MAX_LEN, false);
+	if (ret) {
+		failsafe_http_reply_text(response, 400, "bad name");
+		return;
+	}
+
+	ret = env_set(name, NULL);
+	if (!ret)
+		ret = env_save();
+
+	free(name);
+
+	if (ret) {
+		failsafe_http_reply_text(response, 500, "save failed");
+		return;
+	}
+
+	failsafe_http_reply_text(response, 200, "ok");
+}
+
+static void env_reset_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	int ret;
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	env_set_default(NULL, 0);
+	ret = env_save();
+
+	if (ret) {
+		failsafe_http_reply_text(response, 500, "save failed");
+		return;
+	}
+
+	failsafe_http_reply_text(response, 200, "ok");
+}
+
+static void env_restore_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	struct httpd_form_value *fw;
+	int ret;
+
+	if (status != HTTP_CB_NEW)
+		return;
+
+	if (!request || request->method != HTTP_POST) {
+		failsafe_http_reply_text(response, 405, "method");
+		return;
+	}
+
+	fw = httpd_request_find_value(request, "envfile");
+	if (!fw || !fw->data || fw->size < sizeof(env_t)) {
+		failsafe_http_reply_text(response, 400, "bad file");
+		return;
+	}
+
+	ret = env_import((const char *)fw->data, 1, 0);
+	if (!ret)
+		ret = env_save();
+
+	if (ret) {
+		failsafe_http_reply_text(response, 500, "restore failed");
+		return;
+	}
+
+	failsafe_http_reply_text(response, 200, "ok");
+}
+#endif /* CONFIG_WEBUI_FAILSAFE_ENV */
 
 static void sysinfo_handler(enum httpd_uri_handler_status status,
 							struct httpd_request *request,
@@ -300,6 +914,8 @@ static void reboot_handler(enum httpd_uri_handler_status status,
 		do_reset(NULL, 0, 0, NULL);
 	}
 }
+
+#ifdef CONFIG_WEBUI_FAILSAFE_BACKUP
 
 enum backup_phase {
 	BACKUP_PHASE_HDR = 0,
@@ -975,6 +1591,8 @@ oom:
 	return;
 }
 
+#endif /* CONFIG_WEBUI_FAILSAFE_BACKUP */
+
 
 static void upload_handler(enum httpd_uri_handler_status status,
 			  struct httpd_request *request,
@@ -1040,6 +1658,7 @@ static void upload_handler(enum httpd_uri_handler_status status,
 		goto done;
 	}
 
+#ifdef CONFIG_WEBUI_FAILSAFE_FACTORY
 	fw = httpd_request_find_value(request, "factory");
 	if (fw) {
 		fw_type = FW_TYPE_FACTORY;
@@ -1047,6 +1666,7 @@ static void upload_handler(enum httpd_uri_handler_status status,
 			goto fail;
 		goto done;
 	}
+#endif
 
 	fw = httpd_request_find_value(request, "initramfs");
 	if (fw) {
@@ -1287,11 +1907,26 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/booting.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/cgi-bin/luci", &index_handler, NULL);
 	httpd_register_uri_handler(inst, "/cgi-bin/luci/", &index_handler, NULL);
-	httpd_register_uri_handler(inst, "/backup.html", &html_handler, NULL);
-	httpd_register_uri_handler(inst, "/backupinfo", &backupinfo_handler, NULL);
-	httpd_register_uri_handler(inst, "/backup", &backup_handler, NULL);
 	httpd_register_uri_handler(inst, "/sysinfo", &sysinfo_handler, NULL);
+
+#ifdef CONFIG_WEBUI_FAILSAFE_BACKUP
+	httpd_register_uri_handler(inst, "/backup.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/backup/info", &backupinfo_handler, NULL);
+	httpd_register_uri_handler(inst, "/backup/main", &backup_handler, NULL);
+#endif
+
+#ifdef CONFIG_WEBUI_FAILSAFE_ENV
+	httpd_register_uri_handler(inst, "/env.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/env/list", &env_list_handler, NULL);
+	httpd_register_uri_handler(inst, "/env/set", &env_set_handler, NULL);
+	httpd_register_uri_handler(inst, "/env/unset", &env_unset_handler, NULL);
+	httpd_register_uri_handler(inst, "/env/reset", &env_reset_handler, NULL);
+	httpd_register_uri_handler(inst, "/env/restore", &env_restore_handler, NULL);
+#endif
+
+#ifdef CONFIG_WEBUI_FAILSAFE_FACTORY
 	httpd_register_uri_handler(inst, "/factory.html", &html_handler, NULL);
+#endif
 	httpd_register_uri_handler(inst, "/fail.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/flashing.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/getmtdlayout", &mtd_layout_handler, NULL);
@@ -1300,6 +1935,19 @@ int start_web_failsafe(void)
 		httpd_register_uri_handler(inst, "/gpt.html", &html_handler, NULL);
 #endif
 	httpd_register_uri_handler(inst, "/initramfs.html", &html_handler, NULL);
+#ifdef CONFIG_WEBUI_FAILSAFE_CONSOLE
+	httpd_register_uri_handler(inst, "/console.html", &html_handler, NULL);
+#endif
+
+#ifdef CONFIG_WEBUI_FAILSAFE_CONSOLE
+	/* Enable recording early so we can stream output to the browser */
+	failsafe_webconsole_ensure_recording();
+
+	httpd_register_uri_handler(inst, "/console/poll", &webconsole_poll_handler, NULL);
+	httpd_register_uri_handler(inst, "/console/exec", &webconsole_exec_handler, NULL);
+	httpd_register_uri_handler(inst, "/console/clear", &webconsole_clear_handler, NULL);
+#endif
+
 	httpd_register_uri_handler(inst, "/main.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/reboot", &reboot_handler, NULL);
 	httpd_register_uri_handler(inst, "/reboot.html", &html_handler, NULL);

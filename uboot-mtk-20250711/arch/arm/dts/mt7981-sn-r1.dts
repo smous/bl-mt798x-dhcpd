@@ -8,7 +8,7 @@
 / {
 	#address-cells = <1>;
 	#size-cells = <1>;
-	model = "mt7981-sn_r1";
+	model = "mt7981-sn-r1";
 	compatible = "mediatek,mt7981", "mediatek,mt7981-rfb";
 	chosen {
 		stdout-path = &uart0;
@@ -17,7 +17,7 @@
 
 	config {
 		bootcmd = "mtkboardboot";
-		blink_led = "yellow:status";
+		blink_led = "red:status";
 		system_led = "blue:status";
 	};
 

@@ -438,6 +438,7 @@ button.button {
     cursor: pointer;
     transition: transform var(--anim), filter var(--anim), box-shadow var(--anim);
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+    margin: 6px;
 }
 
 input[type="button"]:hover,
@@ -521,7 +522,8 @@ ul {
     text-align: left;
 }
 
-#upgrade {
+#upgrade,
+#project-info {
     text-align: center;
 }
 
@@ -564,6 +566,89 @@ ul {
     opacity: 0;
     transform: translateY(4px);
     animation: brandIn 420ms ease forwards;
+}
+
+/* Web console */
+.console-card {
+    padding: 0;
+    text-align: left;
+}
+
+.console-output {
+    height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    background: rgba(17, 24, 39, .92);
+    color: #e5e7eb;
+    border: 1px solid rgba(148, 163, 184, .22);
+    border-radius: 12px;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+:root[data-theme="dark"] .console-output {
+    background: rgba(2, 6, 23, .86);
+    border-color: rgba(148, 163, 184, .22);
+}
+
+@media (prefers-color-scheme:dark) {
+    :root:not([data-theme]) .console-output {
+        background: rgba(2, 6, 23, .86);
+        border-color: rgba(148, 163, 184, .22);
+    }
+}
+
+.console-toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.console-token {
+    flex: 1;
+    min-width: 140px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    outline: none;
+}
+
+.console-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.console-input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    outline: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.console-input:focus,
+.console-token:focus {
+    border-color: rgba(37, 99, 235, .55);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+.console-status {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: pre-wrap;
 }
 
 @keyframes brandIn {

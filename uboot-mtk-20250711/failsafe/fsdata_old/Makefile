@@ -21,14 +21,6 @@ obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup.o
 FILE_backup.o := backup.html
 FSPATH_backup.o := backup.html
 
-obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env.o
-FILE_env.o := env.html
-FSPATH_env.o := env.html
-
-obj-$(CONFIG_WEBUI_FAILSAFE_FACTORY) += factory.o
-FILE_factory.o := factory.html
-FSPATH_factory.o := factory.html
-
 obj-y += fail.o
 FILE_fail.o := fail.html
 FSPATH_fail.o := fail.html
@@ -53,13 +45,21 @@ obj-y += main.o
 FILE_main.o := main.js
 FSPATH_main.o := main.js
 
-obj-y += reboot.o
-FILE_reboot.o := reboot.html
-FSPATH_reboot.o := reboot.html
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env.o
+FILE_env.o := env.html
+FSPATH_env.o := env.html
+
+obj-$(CONFIG_WEBUI_FAILSAFE_FACTORY) += factory.o
+FILE_factory.o := factory.html
+FSPATH_factory.o := factory.html
 
 obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console.o
 FILE_console.o := console.html
 FSPATH_console.o := console.html
+
+obj-y += reboot.o
+FILE_reboot.o := reboot.html
+FSPATH_reboot.o := reboot.html
 
 obj-y += style.o
 FILE_style.o := style.css
