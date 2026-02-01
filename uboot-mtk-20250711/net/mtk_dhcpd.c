@@ -70,11 +70,10 @@ struct dhcpd_pkt {
 
 #define DHCP_FLAG_BROADCAST		0x8000
 
-#define DHCPD_POOL_START_STR	"192.168.1.100"
-#define DHCPD_POOL_END_STR		"192.168.1.200"
-
 #define DHCPD_DEFAULT_IP_STR	"192.168.1.1"
 #define DHCPD_DEFAULT_NETMASK_STR "255.255.255.0"
+#define DHCPD_DEFAULT_POOL_START_HOST	100
+#define DHCPD_DEFAULT_POOL_SIZE		101
 
 #define DHCPD_MAX_CLIENTS	8
 
@@ -94,18 +93,26 @@ static bool dhcpd_running;
 
 static struct in_addr dhcpd_get_server_ip(void)
 {
+#ifdef CONFIG_MTK_DHCPD_USE_CONFIG_IP
+	return string_to_ip(CONFIG_IPADDR);
+#else
 	if (net_ip.s_addr)
 		return net_ip;
 
 	return string_to_ip(DHCPD_DEFAULT_IP_STR);
+#endif
 }
 
 static struct in_addr dhcpd_get_netmask(void)
 {
+#ifdef CONFIG_MTK_DHCPD_USE_CONFIG_IP
+	return string_to_ip(CONFIG_NETMASK);
+#else
 	if (net_netmask.s_addr)
 		return net_netmask;
 
 	return string_to_ip(DHCPD_DEFAULT_NETMASK_STR);
+#endif
 }
 
 static struct in_addr dhcpd_get_gateway(void)
@@ -122,6 +129,56 @@ static struct in_addr dhcpd_get_dns(void)
 		return net_dns_server;
 
 	return dhcpd_get_server_ip();
+}
+
+static u32 dhcpd_get_pool_start_host(void)
+{
+#ifdef CONFIG_MTK_DHCPD_USE_CONFIG_IP
+	return (u32)CONFIG_MTK_DHCPD_POOL_START_HOST;
+#else
+	return DHCPD_DEFAULT_POOL_START_HOST;
+#endif
+}
+
+static u32 dhcpd_get_pool_size(void)
+{
+#ifdef CONFIG_MTK_DHCPD_USE_CONFIG_IP
+	return (u32)CONFIG_MTK_DHCPD_POOL_SIZE;
+#else
+	return DHCPD_DEFAULT_POOL_SIZE;
+#endif
+}
+
+static void dhcpd_get_pool_range(u32 *start, u32 *end)
+{
+	struct in_addr server_ip = dhcpd_get_server_ip();
+	struct in_addr netmask = dhcpd_get_netmask();
+	u32 ip_host = ntohl(server_ip.s_addr);
+	u32 mask = ntohl(netmask.s_addr);
+	u32 host_mask = ~mask;
+	u32 host_start = dhcpd_get_pool_start_host();
+	u32 size = dhcpd_get_pool_size();
+	u32 net = ip_host & mask;
+	u32 s, e, max_host;
+
+	if (!size)
+		size = 1;
+
+	max_host = host_mask;
+	host_start &= host_mask;
+	if (host_start == 0)
+		host_start = 1;
+
+	s = net | host_start;
+	e = s + size - 1;
+
+	if ((e & mask) != net || e > (net | max_host))
+		e = net | max_host;
+
+	if (start)
+		*start = s;
+	if (end)
+		*end = e;
 }
 
 static bool dhcpd_mac_equal(const u8 *a, const u8 *b)
@@ -143,8 +200,9 @@ static struct dhcpd_lease *dhcpd_find_lease(const u8 *mac)
 
 static bool dhcpd_ip_in_pool(u32 ip_host)
 {
-	u32 start = ntohl(string_to_ip(DHCPD_POOL_START_STR).s_addr);
-	u32 end = ntohl(string_to_ip(DHCPD_POOL_END_STR).s_addr);
+	u32 start, end;
+
+	dhcpd_get_pool_range(&start, &end);
 
 	return ip_host >= start && ip_host <= end;
 }
@@ -205,8 +263,7 @@ static struct in_addr dhcpd_alloc_ip(const u8 *mac)
 	if (l && dhcpd_ip_in_pool(ntohl(l->ip.s_addr)))
 		return l->ip;
 
-	start = ntohl(string_to_ip(DHCPD_POOL_START_STR).s_addr);
-	end = ntohl(string_to_ip(DHCPD_POOL_END_STR).s_addr);
+	dhcpd_get_pool_range(&start, &end);
 
 	pool_size = end >= start ? (end - start + 1) : 0;
 
@@ -656,6 +713,7 @@ static void dhcpd_udp_handler(uchar *pkt, unsigned int dport,
 int mtk_dhcpd_start(void)
 {
 	struct in_addr pool_start;
+	u32 pool_start_host, pool_end_host;
 
 	/*
 	 * Be robust against net_init()/net_clear_handlers() resetting handlers.
@@ -673,9 +731,9 @@ int mtk_dhcpd_start(void)
 
 	/* Ensure we have a usable local IP, otherwise UDP replies will use 0.0.0.0 */
 	if (!net_ip.s_addr)
-		net_ip = string_to_ip(DHCPD_DEFAULT_IP_STR);
+		net_ip = dhcpd_get_server_ip();
 	if (!net_netmask.s_addr)
-		net_netmask = string_to_ip(DHCPD_DEFAULT_NETMASK_STR);
+		net_netmask = dhcpd_get_netmask();
 	if (!net_gateway.s_addr)
 		net_gateway = net_ip;
 	if (!net_dns_server.s_addr)
@@ -683,7 +741,8 @@ int mtk_dhcpd_start(void)
 
 	memset(leases, 0, sizeof(leases));
 
-	pool_start = string_to_ip(DHCPD_POOL_START_STR);
+	dhcpd_get_pool_range(&pool_start_host, &pool_end_host);
+	pool_start.s_addr = htonl(pool_start_host);
 	next_ip_host = ntohl(pool_start.s_addr);
 
 	prev_udp_handler = net_get_udp_handler();

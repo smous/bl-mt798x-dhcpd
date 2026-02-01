@@ -34,6 +34,13 @@ __pycache__
 output/*
 output_gpt/*
 output_simg/*
+output_ramboot/*
 mt798x_gpt_bin/*
 mt798x_simg/*
 unopen/*
+ramboot_cfg/*
+atf-20260123/*
+uboot-mtk-20260123/*
+migration_configs/*
+migration_dts/*
+migration*.py
