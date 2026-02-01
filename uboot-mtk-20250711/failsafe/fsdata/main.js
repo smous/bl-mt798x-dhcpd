@@ -67,11 +67,11 @@ function ensureBranding() {
         n, i;
     t && ((n = t.nextElementSibling, n && n.classList && n.classList.contains("brand") && n.parentNode && n.parentNode.removeChild(n), t.querySelector && t.querySelector(".brand-inline")) || (i = document.createElement("span"), i.className = "brand-inline", i.textContent = "💡Yuzhii", t.appendChild(document.createTextNode(" ")), t.appendChild(i)))
     if (!t) return;
-    if (document.getElementById("project-info")) return;
-    var projectInfo = document.createElement("div");
-    projectInfo.id = "project-info";
-    projectInfo.innerHTML = 'You can find more infomation about this project: <a href="https://github.com/Yuzhii0718/bl-mt798x-dhcpd" target="_blank">Github</a>';
-    t.parentNode.insertBefore(projectInfo, t.nextSibling);
+    if (t.querySelector && t.querySelector("#project-info")) return;
+    var m = document.createElement("div");
+    m.id = "project-info";
+    m.innerHTML = 'You can find more infomation about this project: <a href="https://github.com/Yuzhii0718/bl-mt798x-dhcpd" target="_blank">Github</a>';
+    t.appendChild(m);
 }
 
 function ensureSidebar() {
@@ -1162,6 +1162,7 @@ var I18N = {
         "404.msg": "你访问的页面不存在！"
     }
 };
+
 APP_STATE = {
     lang: "en",
     theme: "auto",
